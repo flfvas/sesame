@@ -1,0 +1,78 @@
+﻿#Persistent
+#SingleInstance Force
+
+; ==============================================================================
+; 脚本初始化：注册电源通知
+; ==============================================================================
+
+; 定义 GUID_CONSOLE_DISPLAY_STATE (显示器状态 GUID)
+; {6FE69556-704A-47A0-8F24-C28D936FDA47}
+VarSetCapacity(GUID_CONSOLE_DISPLAY_STATE, 16)
+DllCall("ole32\CLSIDFromString", "WStr", "{6FE69556-704A-47A0-8F24-C28D936FDA47}", "Ptr", &GUID_CONSOLE_DISPLAY_STATE)
+
+; 注册电源设置通知
+; 参数: 窗口句柄, GUID 指针, 标志 (0)
+; 返回: 通知句柄 (hPowerNotify)
+hPowerNotify := DllCall("RegisterPowerSettingNotification", "Ptr", A_ScriptHwnd, "Ptr", &GUID_CONSOLE_DISPLAY_STATE, "UInt", 0)
+
+; 监听 Windows 消息 WM_POWERBROADCAST (0x218)
+OnMessage(0x218, "OnPowerBroadcast")
+
+; 用于标记是否是脚本刚启动时的第一次检测
+global isFirstRun := true
+
+Return
+
+; ==============================================================================
+; 消息处理函数
+; ==============================================================================
+OnPowerBroadcast(wParam, lParam) {
+    ; PBT_POWERSETTINGCHANGE = 0x8013 (电源设置已改变)
+    If (wParam = 0x8013) {
+        
+        ; 获取数据里的状态值
+        ; 数据结构偏移: GUID(16字节) + DataLength(4字节) + Data(...)
+        ; 所以 Data 的位置在 lParam + 20
+        DisplayStatus := NumGet(lParam+0, 20, "UChar") 
+        
+        ; 状态说明:
+        ; 0 = 屏幕关闭 (Off)
+        ; 1 = 屏幕开启 (On)
+        ; 2 = 屏幕变暗 (Dimmed)
+
+        If (DisplayStatus = 1) {
+            ; 如果是脚本刚启动，Windows 会立即发送一次当前状态
+            ; 如果你不希望刚运行脚本就弹窗，可以保留下面这个 if 块
+            if (isFirstRun) {
+                isFirstRun := false
+                Return
+            }
+
+            ; 使用 SetTimer 异步弹窗，避免阻塞消息处理函数
+            SetTimer, ShowAlert, -10
+        }
+    }
+    Return 1
+}
+
+
+
+OPENAIRMODE()
+{
+CoordMode, Mouse , Screen
+__ClickX:=1871
+__ClickY:=1044
+__ClickTimes:=1
+Click %__ClickX%, %__ClickY%, %__ClickTimes%
+__ClickX:=1744
+__ClickY:=756
+__ClickTimes:=1
+Click %__ClickX%, %__ClickY%, %__ClickTimes%
+}
+
+
+
+ShowAlert:
+    ;MsgBox, 64, 系统提示, 屏幕被点亮！
+    OPENAIRMODE()
+Return
